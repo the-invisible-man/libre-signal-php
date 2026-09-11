@@ -1,0 +1,23 @@
+{
+    "name": "libresignal/libresignal-php",
+    "description": "A practice framework for CodeSignal's Industry Coding Framework (ICF) assessments, in PHP.",
+    "type": "project",
+    "require": {
+        "php": ">=8.2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "LibreSignal\\BankSystem\\": "Questions/bank_system/",
+            "LibreSignal\\InMemoryDatabase\\": "Questions/in_memory_database/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
