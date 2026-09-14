@@ -1,33 +1,223 @@
 # Level 3
 
-Implement support for queries from different users. All users share a common filesystem in the cloud storage system, but each user is assigned a storage capacity limit.
+Add support for multiple users with individual storage capacity limits.
 
-- `ADD_USER <userId> <capacity>` — should add a new user in the system, with `capacity` as their storage limit in bytes. The total size of all files owned by `userId` cannot exceed `capacity`. The operation fails if a user with `userId` already exists. Returns `"true"` if a user was successfully created, or `"false"` otherwise.
+All users share the same global filesystem.
 
-- `ADD_FILE_BY <userId> <name> <size>` — should behave in the same way as the `ADD_FILE` from Level 1, but the added file should be owned by the user with `userId`. A new file cannot be added to the storage if doing so would exceed the user's `capacity` limit. Returns a string representing the remaining capacity of the user if the file is added successfully, or an empty string otherwise.
+---
 
-> **Note**: All queries calling the `ADD_FILE` operation implemented during Level 1 are run by the user with `userId = "admin"`, who has unlimited storage capacity.
+## `ADD_USER <userId> <capacity>`
 
-- `MERGE_USER <userId1> <userId2>` — should merge the account of `userId2` with `userId1`. Ownership of all of `userId2`'s files is transferred to `userId1`, and any remaining storage capacity is also added to `userId1`'s limit. `userId2` is deleted if the merge is successful. Returns a string representing the remaining capacity of `userId1` after merging, or an empty string if one of the users does not exist or `userId1` is equal to `userId2`. It is guaranteed that neither `userId1` nor `userId2` equals `"admin"`.
+Creates a new user with a storage capacity limit.
 
-## Examples
+### Rules
 
-The example below shows how these operations should work (the section is scrollable to the right):
+- `capacity` is the maximum total size, in bytes, of files owned by the user.
+- If `userId` already exists:
+    - do nothing
+    - return `"false"`
+- Otherwise:
+    - create the user
+    - return `"true"`
 
-| Queries | Explanations |
-|--------|--------------|
-| `["ADD_USER", "user1", "200"]` | returns `"true"`; creates user `"user1"` with 200 bytes capacity limit |
-| `["ADD_USER", "user1", "100"]` | returns `"false"`; `"user1"` already exists |
-| `["ADD_FILE_BY", "user1", "/dir/file.med", "50"]` | returns `"150"` |
-| `["ADD_FILE_BY", "user1", "/big.blob", "140"]` | returns `"10"` |
-| `["ADD_FILE_BY", "user1", "/file-small", "20"]` | returns `""`; `"user1"` does not have enough storage capacity |
-| `["ADD_FILE", "/dir/admin_file", "300"]` | returns `"true"`; done by `"admin"` with unlimited capacity |
-| `["ADD_USER", "user2", "110"]` | returns `"true"` |
-| `["ADD_FILE_BY", "user2", "/dir/file.med", "45"]` | returns `""`; file already exists and owned by `"user1"` |
-| `["ADD_FILE_BY", "user2", "/new_file", "50"]` | returns `"60"` |
-| `["MERGE_USER", "user1", "user2"]` | returns `"70"`; transfers ownership of `"/new_file"` to `"user1"` |
+---
 
-The output should be:
-```json
-["true", "false", "150", "10", "", "true", "true", "", "60", "70"]
+## `ADD_FILE_BY <userId> <name> <size>`
+
+Adds a file owned by a specific user.
+
+### Rules
+
+- The file is added to the same global filesystem used by `ADD_FILE`.
+- File names are globally unique across all users.
+- The operation fails if:
+    - `userId` does not exist
+    - a file with `name` already exists
+    - adding the file would exceed the user's storage capacity
+- If successful:
+    - add the file
+    - assign ownership to `userId`
+    - return the user's remaining capacity as a string
+- Otherwise:
+    - return `""`
+
+### Remaining capacity
+
+```text
+remaining capacity
+= user capacity
+- total size of files currently owned by the user
 ```
+
+---
+
+## `ADD_FILE <name> <size>`
+
+Existing Level 1 behavior remains unchanged.
+
+### Additional Rule
+
+Every `ADD_FILE` call is performed by the special user:
+
+```text
+admin
+```
+
+`admin` has unlimited storage capacity.
+
+Files created through `ADD_FILE` are therefore owned by `admin`.
+
+---
+
+## `MERGE_USER <userId1> <userId2>`
+
+Merges `userId2` into `userId1`.
+
+### Invalid Cases
+
+Return `""` if:
+
+- `userId1` does not exist
+- `userId2` does not exist
+- `userId1 === userId2`
+
+Neither user will ever be `"admin"`.
+
+### On Successful Merge
+
+- Transfer ownership of every file owned by `userId2` to `userId1`.
+- Add `userId2`'s remaining storage capacity to `userId1`.
+- Delete `userId2`.
+- Return `userId1`'s remaining capacity as a string.
+
+### Capacity Behavior
+
+The amount transferred is `userId2`'s **remaining capacity**.
+
+Example:
+
+```text
+user1:
+capacity = 200
+files owned = 190
+remaining = 10
+
+user2:
+capacity = 110
+files owned = 50
+remaining = 60
+```
+
+After:
+
+```text
+MERGE_USER("user1", "user2")
+```
+
+The resulting remaining capacity is:
+
+```text
+10 + 60 = 70
+```
+
+---
+
+# Examples
+
+```text
+ADD_USER("user1", 200)
+-> "true"
+
+ADD_USER("user1", 100)
+-> "false"
+```
+
+`user1` already exists, so the second operation fails.
+
+```text
+ADD_FILE_BY("user1", "/dir/file.med", 50)
+-> "150"
+
+ADD_FILE_BY("user1", "/big.blob", 140)
+-> "10"
+
+ADD_FILE_BY("user1", "/file-small", 20)
+-> ""
+```
+
+The last operation fails because `user1` only has 10 bytes remaining.
+
+```text
+ADD_FILE("/dir/admin_file", 300)
+-> "true"
+```
+
+This succeeds because `ADD_FILE` is performed by `admin`, who has unlimited capacity.
+
+```text
+ADD_USER("user2", 110)
+-> "true"
+
+ADD_FILE_BY("user2", "/dir/file.med", 45)
+-> ""
+```
+
+This fails because `"/dir/file.med"` already exists in the global filesystem.
+
+```text
+ADD_FILE_BY("user2", "/new_file", 50)
+-> "60"
+```
+
+Before merging:
+
+```text
+user1 remaining = 10
+user2 remaining = 60
+```
+
+Then:
+
+```text
+MERGE_USER("user1", "user2")
+-> "70"
+```
+
+After the merge:
+
+- `"/new_file"` is owned by `user1`
+- `user2` no longer exists
+- `user1` has 70 bytes remaining
+
+---
+
+# Expected Output
+
+```json
+[
+  "true",
+  "false",
+  "150",
+  "10",
+  "",
+  "true",
+  "true",
+  "",
+  "60",
+  "70"
+]
+```
+
+---
+
+# Important Rules
+
+- The filesystem is global.
+- File names are globally unique across all users.
+- Each non-admin user has a storage capacity limit.
+- `admin` has unlimited storage capacity.
+- `ADD_FILE` creates admin-owned files.
+- `ADD_FILE_BY` creates files owned by the specified user.
+- Merging users transfers file ownership.
+- Merging users combines their remaining storage capacities.
+- `userId2` is deleted after a successful merge.

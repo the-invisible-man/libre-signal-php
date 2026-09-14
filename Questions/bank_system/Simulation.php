@@ -178,17 +178,25 @@ class Simulation
 
     protected function issueCashback(Transaction $payment, int $currentTimestamp): void
     {
-        if ($payment->isClearedPayment($currentTimestamp) && !$payment->hasIssuedCashback()) {
-            $account = $this->getAccount($payment->getAccountId());
-
-            // round down by dropping decimal values
-            $amount = (int)(abs($payment->getAmount()) * 0.02);
-            $cashback = new Transaction($account->getId(), $amount, $currentTimestamp, Transaction::TYPE['CASHBACK']);
-
-            $payment->setRefTransaction($cashback);
-
-            $account->addTransaction($cashback, false);
+        if (!$this->shouldIssueCashback($payment, $currentTimestamp)) {
+            // Nothing to do
+            return;
         }
+
+        $account = $this->getAccount($payment->getAccountId());
+
+        // round down by dropping decimal values
+        $amount = (int)(abs($payment->getAmount()) * 0.02);
+        $cashback = new Transaction($account->getId(), $amount, $currentTimestamp, Transaction::TYPE['CASHBACK']);
+
+        $payment->setRefTransaction($cashback);
+
+        $account->addTransaction($cashback);
+    }
+
+    protected function shouldIssueCashback(Transaction $payment, int $currentTimestamp): bool
+    {
+        return $payment->isClearedPayment($currentTimestamp) && !$payment->hasIssuedCashback();
     }
 
     public function getPayment(string $id):? Transaction
